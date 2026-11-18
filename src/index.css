@@ -1,0 +1,605 @@
+/* Coup 3D · paleta do GDD §6.2 */
+:root {
+  --bg: #171311;
+  --wood: #39271e;
+  --felt: #542326;
+  --gold: #c59b53;
+  --ivory: #eee5d5;
+  --beige: #b7a58b;
+  --highlight: #e2bc76;
+
+  --glass: rgba(23, 19, 17, 0.62);
+  --glass-strong: rgba(23, 19, 17, 0.82);
+  --line: rgba(197, 155, 83, 0.32);
+  --line-strong: rgba(226, 188, 118, 0.6);
+
+  --display: 'Cormorant Garamond', Georgia, serif;
+  --ui: 'Manrope', system-ui, sans-serif;
+
+  color-scheme: dark;
+  font-family: var(--ui);
+  color: var(--ivory);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+}
+
+.scene {
+  position: absolute !important;
+  inset: 0;
+  cursor: grab;
+}
+
+/* ---------------- HUD ---------------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud button,
+.hud .me-card {
+  pointer-events: auto;
+}
+
+.hud.is-locked .action-panel,
+.hud.is-locked .game-log {
+  opacity: 0.5;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 75% 70% at 50% 48%, transparent 55%, rgba(8, 5, 4, 0.72) 100%),
+    linear-gradient(to bottom, rgba(10, 7, 6, 0.55), transparent 16%, transparent 80%, rgba(10, 7, 6, 0.6));
+}
+
+.hud-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 22px 28px;
+}
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.6));
+}
+
+.logo span {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 0.9;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, #f3d9a2 0%, var(--highlight) 40%, #9c7638 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.prototype-badge {
+  font-size: 10px;
+  padding: 5px 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--beige);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+}
+
+.turn-indicator {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 6px 6px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  font-size: 15px;
+  color: var(--beige);
+}
+
+.turn-indicator strong {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ivory);
+  margin-left: 4px;
+}
+
+.turn-ring {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.turn-ring svg {
+  position: absolute;
+  inset: 0;
+}
+
+.turn-ring__track {
+  fill: rgba(0, 0, 0, 0.35);
+  stroke: rgba(197, 155, 83, 0.2);
+  stroke-width: 3;
+}
+
+.turn-ring__value {
+  fill: none;
+  stroke: var(--highlight);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.turn-ring span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--highlight);
+}
+
+/* ---------------- Registro ---------------- */
+
+.game-log {
+  position: absolute;
+  left: 22px;
+  top: 42%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 244px;
+  transition: opacity 0.3s;
+}
+
+.log-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(197, 155, 83, 0.18);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ivory);
+}
+
+.log-entry__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--highlight);
+  background: radial-gradient(circle at 35% 30%, rgba(226, 188, 118, 0.22), rgba(226, 188, 118, 0.05));
+  border: 1px solid var(--line);
+}
+
+.log-entry__icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.log-entry--challenge .log-entry__icon {
+  color: #f0c8a0;
+  background: radial-gradient(circle at 35% 30%, rgba(170, 50, 50, 0.6), rgba(84, 35, 38, 0.4));
+}
+
+/* ---------------- Ações ---------------- */
+
+.action-panel {
+  position: absolute;
+  right: 22px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 224px;
+  transition: opacity 0.3s;
+}
+
+.action-panel__rule {
+  height: 1px;
+  margin: 4px 10px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+}
+
+.action {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  color: var(--ivory);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.2s;
+}
+
+.action svg {
+  flex: none;
+  color: var(--highlight);
+}
+
+.action:hover:not(:disabled) {
+  background: rgba(57, 39, 30, 0.85);
+  border-color: var(--line-strong);
+  transform: translateX(-3px);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action--character {
+  border-color: rgba(84, 35, 38, 0.9);
+  background: linear-gradient(90deg, rgba(84, 35, 38, 0.55), var(--glass) 70%);
+}
+
+.action--character::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--gold);
+}
+
+.action--primary {
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(197, 155, 83, 0.2), rgba(23, 19, 17, 0.75));
+}
+
+.action--primary.is-on {
+  background: linear-gradient(180deg, rgba(226, 188, 118, 0.35), rgba(57, 39, 30, 0.85));
+}
+
+.action kbd,
+.hint kbd {
+  margin-left: auto;
+  font-family: var(--ui);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  color: var(--beige);
+}
+
+.action__cost {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--beige);
+}
+
+.action__cost svg {
+  color: var(--gold);
+}
+
+/* ---------------- Rodapé ---------------- */
+
+.hud-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 22px 28px;
+}
+
+.me-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 26px 8px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--glass-strong);
+  backdrop-filter: blur(10px);
+}
+
+.me-card__name {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.me-card__stats {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+.me-card__stats b {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--highlight);
+}
+
+.me-card__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 6px;
+  background: var(--line);
+}
+
+.me-card__label {
+  font-size: 12px;
+  color: var(--beige);
+}
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(197, 155, 83, 0.16);
+  font-size: 13px;
+  color: var(--beige);
+  white-space: nowrap;
+}
+
+.hint kbd {
+  margin: 0;
+}
+
+.hint--button {
+  all: unset;
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line-strong);
+  font-size: 13px;
+  color: var(--beige);
+  cursor: pointer;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.hint--button b {
+  color: var(--highlight);
+  font-weight: 600;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(238, 229, 213, 0.75);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  translate: -50% 0;
+  max-width: 440px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line-strong);
+  backdrop-filter: blur(10px);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--ivory);
+}
+
+/* ---------------- Retratos e plaquinhas ---------------- */
+
+.portrait {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  box-shadow:
+    0 0 0 3px rgba(23, 19, 17, 0.85),
+    0 0 0 4px rgba(197, 155, 83, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.5);
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--ivory);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.portrait.is-active {
+  border-color: var(--highlight);
+  box-shadow:
+    0 0 0 3px rgba(23, 19, 17, 0.85),
+    0 0 0 4px var(--highlight),
+    0 0 18px rgba(226, 188, 118, 0.55);
+}
+
+.player-tag {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 16px 5px 5px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  color: var(--ivory);
+  font-family: var(--ui);
+  transition: border-color 0.3s;
+}
+
+.player-tag.is-turn {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 22px rgba(226, 188, 118, 0.18);
+}
+
+.player-tag__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.turn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--highlight);
+  box-shadow: 0 0 8px var(--highlight);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.player-tag__stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.coin-chip {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f6dc9e, var(--gold) 55%, #7a5726);
+  box-shadow: inset 0 0 0 1.5px rgba(122, 87, 38, 0.6);
+}
+
+.coin-chip--lg {
+  width: 18px;
+  height: 18px;
+}
+
+.influence-pips {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+}
+
+.influence-pips i {
+  width: 8px;
+  height: 11px;
+  border-radius: 2px;
+  border: 1px solid var(--line-strong);
+}
+
+.influence-pips i.on {
+  background: linear-gradient(160deg, #7a2a30, var(--felt));
+  border-color: var(--gold);
+}
+
+.influence-pips--lg i {
+  width: 11px;
+  height: 15px;
+}
+
+@media (max-width: 900px) {
+  .game-log {
+    display: none;
+  }
+  .prototype-badge {
+    display: none;
+  }
+}
