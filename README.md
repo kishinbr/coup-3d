@@ -1,68 +1,83 @@
-# Coup 3D — Fase 1: protótipo visual
+# Coup 3D
 
 Jogo de blefe inspirado no Coup (edição base), em 3D e em primeira pessoa, num cassino clandestino.
-Este repositório está na **Fase 1** do GDD: cena 3D navegável, sem regras e sem multiplayer.
+
+**Estado atual: Fase 3 — regras completas, partida local contra bots.**
+Por decisão do projeto, a Fase 3 (regras) veio antes da Fase 2 (visual e animações), que fica para o final.
 
 ## Como rodar
 
 ```bash
 npm install
 npm run dev        # abre em http://localhost:5173
+npm test           # testes das regras + simulação de partidas
 npm run build      # checa TypeScript e gera dist/
-npm run preview    # serve o build
 ```
 
-Requer Node 20 ou mais recente.
+Requer Node 20.19+ (ou 22+). No Windows, se o PowerShell bloquear o `npm`, rode uma vez:
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
-## Controles
+## Como jogar
+
+1. Na tela inicial, escolha seu nome e de 1 a 5 adversários (bots).
+2. Na sua vez, escolha uma ação no painel da direita. Ações com alvo pedem para escolher o jogador
+   (no painel central ou clicando na plaquinha sobre ele).
+3. Quando alguém declara uma influência, aparece o painel para **Contestar** ou **Permitir**; quando você pode
+   bloquear, aparecem as opções de bloqueio. Você tem 15 segundos; sem resposta conta como "permitir".
+4. Ao perder uma influência com duas cartas na mão, você escolhe qual revelar.
 
 | Entrada | Ação |
 |---|---|
 | Clique na cena | Captura o cursor; mover o mouse olha ao redor |
-| Arrastar | Também olha ao redor (quando o navegador bloqueia a captura do cursor) |
+| Arrastar | Também olha ao redor (quando o navegador bloqueia a captura) |
 | ESC | Libera o cursor / guarda as cartas |
 | C ou "Ver cartas" | Consulta privada das suas influências |
 
-## O que existe nesta fase
-
-- Salão do cassino: piso, tapete, paredes forradas, colunas, cortinas de veludo, lustres, arandelas e mesas ao fundo.
-- Mesa de 6 lugares com feltro vermelho, borda de madeira, frisos dourados e zonas da **Corte** e do **Tesouro**.
-- Três adversários provisórios (Lucas, Marina, Rafael) com roupas, cabelos e rostos distintos, animação de respiração, piscar e olhar.
-- Cartas físicas com frente e verso próprios (arte desenhada em código), moedas 3D instanciadas, Corte com 17 cartas.
-- Câmera em primeira pessoa com limites de rotação, e a consulta de cartas que inclina a câmera e traz as cartas para perto.
-- HUD: logotipo, vez do jogador, registro, painel de ações, seus dados e plaquinhas sobre os adversários.
-
-**Ilustrativo (ainda não funciona):** os botões de ação mostram um aviso em vez de executar regras,
-o cronômetro é estático e o registro tem mensagens fixas. Tudo vem de `src/stores/gameStore.ts`.
-
-## Estrutura
+## Arquitetura
 
 ```
-src/
-  components/
-    game/        cena: CasinoScene, CasinoRoom, PokerTable, PlayerAvatar, Chair, PlayingCard, Coin, ...
-    camera/      CameraController (olhar), HeldCards (consulta de cartas)
-    interface/   GameHUD, ActionPanel, GameLog, PlayerTag, Portrait, Icons
-  game/
-    types/       tipos públicos (PublicPlayer, TableView...). Sem campo para cartas alheias.
-    constants/   paleta, influências, medidas da mesa
-    rules/       (Fase 3) motor de regras
-  stores/        zustand: gameStore, interfaceStore, cameraStore
-  utils/         texturas procedurais (cartas, feltro, piso, parede)
-server/          (Fase 4) Cloudflare Worker + Durable Objects
-tests/           (Fase 3) testes das regras
+src/game/rules/      motor de regras PURO (sem tela, sem rede, sem tempo)
+  engine.ts          createGame, applyCommand, waitingOn — a máquina de estados
+  actions.ts         tabela das 7 ações: custo, influência declarada, quem bloqueia
+  view.ts            getPlayerView: o que UM jogador pode saber + o que ele pode fazer agora
+  random.ts          gerador com semente (partidas reproduzíveis)
+src/game/bots/       bot simples; só enxerga a PlayerView, como um humano
+src/services/
+  localGame.ts       faz o papel do servidor: guarda o estado, valida, agenda bots e o tempo de resposta
+  eventText.ts       eventos → frases do registro
+src/stores/          zustand: o cliente guarda só a PlayerView, nunca o estado completo
+src/components/      cena 3D (game/, camera/) e HUD (interface/)
+tests/rules/         casos do GDD §15
+tests/game/          1.300 partidas simuladas checando invariantes
 ```
 
-## Decisões técnicas
+Fluxo de uma ação no motor (GDD §3, §4, §8.5):
 
-- **Sem downloads de assets:** texturas desenhadas em canvas e mapa de ambiente gerado com `Lightformer`. A cena abre sem rede.
-- **Desempenho:** uma única luz com sombra, moedas num só `InstancedMesh`, `dpr` limitado a 1,75, sem pós-processamento.
-  A vinheta é feita em CSS.
-- **Privacidade desde já:** cartas de adversário são desenhadas sem `influence`, ou seja, só com o verso.
-  O tipo `PublicPlayer` não tem onde guardar cartas ocultas.
-- **Fontes:** Cormorant Garamond (títulos) e Manrope (interface), empacotadas via `@fontsource`.
+```
+declarar → janela de contestação (se declara influência)
+         → janela de bloqueio (se bloqueável)
+         → janela de contestação do bloqueio
+         → resolução → próximo turno
+```
 
-## Próximo passo (Fase 2)
+Perdas de influência interrompem o fluxo até a carta ser escolhida. Cada comando devolve um novo estado e
+uma lista de eventos (`ACTION_DECLARED`, `CHALLENGE_RESOLVED`, `INFLUENCE_LOST`, `COINS_TRANSFERRED`...),
+que hoje alimentam o registro e na fase visual vão disparar as animações.
 
-Trocar os personagens provisórios por modelos GLB (Blender), adicionar as animações de apontar, contestar,
-transferência de moedas e revelação de cartas, e tornar a interface contextual.
+Na Fase 4, `localGame.ts` é substituído por um Durable Object que roda **o mesmo** `engine.ts`
+e envia a cada jogador apenas o resultado de `getPlayerView`.
+
+## Decisões sobre pontos não especificados no GDD
+
+- **Tamanho da Corte:** o GDD fala em 15 cartas, mas isso só vale para 5 jogadores. O jogo usa 25 − 2 × jogadores.
+- **Ordem das respostas:** em toda ação, primeiro abre-se a contestação; só depois o bloqueio (GDD §8.5 aplicado a todas).
+- **Embaixador com uma influência:** compra 2 e mantém 1 (a regra do jogo de base).
+- **Tempo de resposta (modo local):** 15 s; sem resposta conta como "permitir".
+- **Alvo eliminado no meio da ação:** se o alvo de um roubo perde a última influência ao contestar, o roubo ainda acontece;
+  um assassinato contra quem já foi eliminado não tem efeito.
+- **Moedas de eliminados:** ficam com o jogador e não têm mais uso.
+
+## Próximos passos
+
+- **Fase 4:** salas online (Cloudflare Workers + Durable Objects), entrada por código, reconexão.
+- **Fase 2 / 5 (visual):** personagens GLB, animações de apontar, contestar, moedas atravessando a mesa, revelação de cartas, sons.

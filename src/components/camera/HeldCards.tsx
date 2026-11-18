@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore } from '../../stores/gameStore'
@@ -15,7 +15,8 @@ export function HeldCards() {
   const group = useRef<THREE.Group>(null)
   const cards = useRef<(THREE.Group | null)[]>([])
   const progress = useRef(0)
-  const influences = useGameStore((s) => s.table.myInfluences)
+  const myCards = useGameStore((s) => s.view?.myCards)
+  const influences = useMemo(() => (myCards ?? []).filter((c) => !c.revealed).map((c) => c.influence), [myCards])
 
   useFrame(({ clock }, delta) => {
     const open = useInterfaceStore.getState().cardsOpen

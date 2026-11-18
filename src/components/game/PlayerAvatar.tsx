@@ -21,9 +21,11 @@ interface Props {
   /** Ponto (no mundo) para onde o personagem tende a olhar. */
   lookAt: THREE.Vector3
   phase?: number
+  /** Eliminado: abaixa a cabeça e larga as cartas (GDD §8.1). */
+  eliminated?: boolean
 }
 
-export function PlayerAvatar({ look, cardsInHand, lookAt, phase = 0 }: Props) {
+export function PlayerAvatar({ look, cardsInHand, lookAt, phase = 0, eliminated = false }: Props) {
   const root = useRef<THREE.Group>(null)
   const chest = useRef<THREE.Group>(null)
   const head = useRef<THREE.Group>(null)
@@ -56,10 +58,11 @@ export function PlayerAvatar({ look, cardsInHand, lookAt, phase = 0 }: Props) {
       // vira a cabeça na direção do alvo, com limites e um leve balanço
       tmp.copy(lookAt)
       root.current.worldToLocal(tmp)
-      const yaw = THREE.MathUtils.clamp(Math.atan2(tmp.x, tmp.z), -0.6, 0.6)
+      const yaw = eliminated ? 0 : THREE.MathUtils.clamp(Math.atan2(tmp.x, tmp.z), -0.6, 0.6)
       const sway = Math.sin(t * 0.37) * 0.12 + Math.sin(t * 0.83) * 0.04
-      head.current.rotation.y = THREE.MathUtils.lerp(head.current.rotation.y, yaw * 0.7 + sway, 0.05)
-      head.current.rotation.x = Math.sin(t * 0.5) * 0.03 + 0.04
+      head.current.rotation.y = THREE.MathUtils.lerp(head.current.rotation.y, yaw * 0.7 + sway * (eliminated ? 0.3 : 1), 0.05)
+      const pitch = eliminated ? 0.5 : Math.sin(t * 0.5) * 0.03 + 0.04
+      head.current.rotation.x = THREE.MathUtils.lerp(head.current.rotation.x, pitch, 0.05)
       head.current.rotation.z = Math.sin(t * 0.29) * 0.025
     }
     if (eyes.current) {

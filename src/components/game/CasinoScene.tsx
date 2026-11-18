@@ -20,27 +20,38 @@ import { TurnMarker } from './TurnMarker'
 const LOCAL_EYE = new THREE.Vector3(0, EYE_HEIGHT, 1.72)
 const TREASURY_COINS = 30
 
-/** Monta a cena completa a partir da visão de mesa (TableView). */
+/** Monta a cena a partir da PlayerView: só desenha o que o jogador pode saber. */
 export function CasinoScene() {
-  const table = useGameStore((s) => s.table)
+  const view = useGameStore((s) => s.view)
+  const seats = useGameStore((s) => s.seats)
+  const send = useGameStore((s) => s.send)
   const cardsOpen = useInterfaceStore((s) => s.cardsOpen)
-  const opponents = table.players.filter((p) => p.id !== table.localPlayerId)
-  const me = table.players.find((p) => p.id === table.localPlayerId)
-  const turnSeat = table.players.find((p) => p.id === table.currentTurnPlayerId)?.seat ?? 0
+  const targeting = useInterfaceStore((s) => s.targeting)
+  const setTargeting = useInterfaceStore((s) => s.setTargeting)
+
+  const players = useMemo(() => view?.players ?? [], [view])
+  const me = players.find((p) => p.id === view?.viewerId)
+  const opponents = players.filter((p) => p.id !== view?.viewerId)
+  const turnSeat = view ? seats[view.currentPlayerId] : undefined
+  const validTargets = view?.prompt?.kind === 'choose_action' ? view.prompt.targets : []
 
   const coins = useMemo(() => {
     const all: CoinPlacement[] = []
     const y = TABLE.surfaceY
-    // moedas de cada jogador, à direita de quem está sentado
-    for (const p of table.players) {
-      const a = seatAngle(p.seat)
-      const [cx, cz] = seatPoint(p.seat, 0.98)
-      const right = new THREE.Vector2(Math.cos(a), -Math.sin(a)) // direita do jogador sentado
-      const sx = cx + right.x * 0.24
-      const sz = cz + right.y * 0.24
-      all.push(...stackPlacements(sx, y, sz, p.coins, p.seat + 3))
+    for (const p of players) {
+      const seat = seats[p.id]
+      if (seat === undefined) continue
+      const a = seatAngle(seat)
+      const [cx, cz] = seatPoint(seat, 0.98)
+      const right = new THREE.Vector2(Math.cos(a), -Math.sin(a)) // à direita de quem está sentado
+      // pilhas de até 8 moedas, lado a lado
+      for (let left = p.coins, k = 0; left > 0; k++) {
+        const n = Math.min(8, left)
+        left -= n
+        const off = 0.24 + k * 0.055
+        all.push(...stackPlacements(cx + right.x * off, y, cz + right.y * off, n, seat * 10 + k + 3))
+      }
     }
-    // tesouro: pilhas de alturas variadas
     const [tx, tz] = TREASURY_POSITION
     const heights = [8, 6, 7, 5, 4]
     const offsets = [
@@ -57,7 +68,7 @@ export function CasinoScene() {
       all.push(...stackPlacements(tx + offsets[i][0], y, tz + offsets[i][1], n, 20 + i))
     })
     return all
-  }, [table.players])
+  }, [players, seats])
 
   return (
     <>
@@ -66,33 +77,43 @@ export function CasinoScene() {
       <CasinoRoom />
       <PokerTable />
 
-      {/* cadeiras vazias completam a mesa de 6 lugares */}
-      {Array.from({ length: TABLE.seatCount }, (_, seat) => seat)
-        .filter((seat) => seat !== 0)
-        .map((seat) => {
-          const [x, z] = seatPoint(seat, TABLE.seatRadius)
-          return <Chair key={seat} position={[x, 0, z]} rotation-y={seatAngle(seat) + Math.PI} />
-        })}
+      {Array.from({ length: TABLE.seatCount - 1 }, (_, i) => i + 1).map((seat) => {
+        const [x, z] = seatPoint(seat, TABLE.seatRadius)
+        return <Chair key={seat} position={[x, 0, z]} rotation-y={seatAngle(seat) + Math.PI} />
+      })}
 
       {opponents.map((p, i) => {
-        const [x, z] = seatPoint(p.seat, TABLE.seatRadius)
+        const seat = seats[p.id]
+        if (seat === undefined) return null
+        const [x, z] = seatPoint(seat, TABLE.seatRadius)
         const look = AVATAR_LOOKS[p.id]
+        const selectable = targeting !== null && validTargets.includes(p.id)
         return (
           <group key={p.id}>
             {look && (
-              <group position={[x, 0, z]} rotation-y={seatAngle(p.seat) + Math.PI}>
-                <PlayerAvatar look={look} cardsInHand={p.hiddenInfluenceCount} lookAt={LOCAL_EYE} phase={i * 2.3} />
+              <group position={[x, 0, z]} rotation-y={seatAngle(seat) + Math.PI}>
+                <PlayerAvatar look={look} cardsInHand={p.hiddenInfluenceCount} lookAt={LOCAL_EYE} phase={i * 2.3} eliminated={p.eliminated} />
               </group>
             )}
-            <Html position={[x, AVATAR_TAG_HEIGHT, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
-              <PlayerTag player={p} isTurn={p.id === table.currentTurnPlayerId} />
+            <Html position={[x, AVATAR_TAG_HEIGHT, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: selectable ? 'auto' : 'none' }}>
+              <PlayerTag
+                player={p}
+                isTurn={p.id === view?.currentPlayerId && view?.phase.kind !== 'game_over'}
+                thinking={!!view?.phase.waitingOn.includes(p.id)}
+                selectable={selectable}
+                onSelect={() => {
+                  if (!targeting) return
+                  send({ type: 'declare_action', action: targeting, targetId: p.id })
+                  setTargeting(null)
+                }}
+              />
             </Html>
-            <RevealedCards seat={p.seat} cards={p.revealed} />
+            <RevealedCards seat={seat} cards={p.revealed} />
           </group>
         )
       })}
 
-      {/* cartas do jogador local, viradas para baixo na mesa (somem quando ele as pega) */}
+      {/* suas cartas ocultas, viradas para baixo (somem quando você as pega) */}
       {me && !cardsOpen && (
         <group position={[0, TABLE.surfaceY + 0.002, 0.98]}>
           {Array.from({ length: me.hiddenInfluenceCount }, (_, i) => (
@@ -106,9 +127,9 @@ export function CasinoScene() {
       )}
       {me && <RevealedCards seat={0} cards={me.revealed} />}
 
-      <CourtDeck count={table.courtCount} />
+      <CourtDeck count={view?.courtCount ?? 25} />
       <CoinField coins={coins} />
-      <TurnMarker seat={turnSeat} />
+      {turnSeat !== undefined && view?.phase.kind !== 'game_over' && <TurnMarker seat={turnSeat} />}
       <HeldCards />
     </>
   )
