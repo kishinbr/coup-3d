@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useNow } from '../../hooks/useNow'
 import { AnimatePresence, motion } from 'motion/react'
 import { ACTIONS } from '../../game/rules/actions'
 import { INFLUENCES } from '../../game/constants/influences'
 import type { ActionType, InfluenceCard, PlayerView, Prompt } from '../../game/types/engine'
 import { describeAction, withArticle } from '../../services/eventText'
-import { RESPONSE_TIME_MS } from '../../services/localGame'
 import { useGameStore } from '../../stores/gameStore'
 import { useInterfaceStore } from '../../stores/interfaceStore'
 import { cardImageUrl } from '../../utils/cardImage'
@@ -18,7 +18,7 @@ import { Portrait } from './Portrait'
 export function DecisionPanel() {
   const view = useGameStore((s) => s.view)
   const targeting = useInterfaceStore((s) => s.targeting)
-  if (!view) return null
+  if (!view || view.phase.kind === 'game_over') return null
   const prompt = view.prompt
 
   let content: React.ReactNode = null
@@ -67,6 +67,7 @@ function TargetSelector({
 }) {
   const setTargeting = useInterfaceStore((s) => s.setTargeting)
   const send = useGameStore((s) => s.send)
+  const looks = useGameStore((s) => s.looks)
   const def = ACTIONS[targeting]
   return (
     <>
@@ -85,7 +86,7 @@ function TargetSelector({
                 setTargeting(null)
               }}
             >
-              <Portrait id={p.id} name={p.name} size={34} />
+              <Portrait look={looks[p.id]} name={p.name} size={34} />
               <span className="target__name">{p.name}</span>
               <span className="target__meta">
                 <span className="coin-chip" /> {p.coins} · {p.hiddenInfluenceCount} infl.
@@ -234,17 +235,13 @@ function ExchangeChoice({ cards, keep }: { cards: InfluenceCard[]; keep: number 
 
 /** Barra do tempo restante para responder. */
 function Countdown() {
-  const deadline = useGameStore((s) => s.responseDeadline)
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 200)
-    return () => clearInterval(id)
-  }, [])
+  const deadline = useGameStore((s) => s.deadline)
+  const now = useNow(!!deadline, 200)
   if (!deadline) return null
-  const left = Math.max(0, deadline - now)
+  const left = Math.max(0, deadline.at - now)
   return (
     <div className="countdown" aria-label={`${Math.ceil(left / 1000)} segundos`}>
-      <div className="countdown__bar" style={{ width: `${(left / RESPONSE_TIME_MS) * 100}%` }} />
+      <div className="countdown__bar" style={{ width: `${(left / deadline.total) * 100}%` }} />
       <span>{Math.ceil(left / 1000)}s · sem resposta conta como “permitir”</span>
     </div>
   )

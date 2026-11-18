@@ -83,7 +83,19 @@ export function applyCommand(state: GameState, playerId: string, command: Comman
   if (player.eliminated) return fail('Jogadores eliminados não podem agir')
 
   let error: string | undefined
-  switch (command.type) {
+  // comandos vêm da rede: qualquer formato inesperado vira erro, nunca exceção
+  try {
+    error = dispatch(ctx, player, command)
+  } catch {
+    error = 'Comando inválido'
+  }
+  if (error) return fail(error)
+  return { ok: true, state: ctx.s, events: ctx.events }
+}
+
+function dispatch(ctx: Ctx, player: PlayerState, command: Command): string | undefined {
+  let error: string | undefined
+  switch (command?.type) {
     case 'declare_action':
       error = declareAction(ctx, player, command.action, command.targetId)
       break
@@ -105,8 +117,7 @@ export function applyCommand(state: GameState, playerId: string, command: Comman
     default:
       error = 'Comando desconhecido'
   }
-  if (error) return fail(error)
-  return { ok: true, state: ctx.s, events: ctx.events }
+  return error
 }
 
 function fail(error: string): CommandResult {
@@ -117,8 +128,8 @@ function declareAction(ctx: Ctx, player: PlayerState, type: ActionType, targetId
   const s = ctx.s
   if (s.phase.kind !== 'awaiting_action') return 'Agora não é momento de declarar uma ação'
   if (current(s).id !== player.id) return 'Não é a sua vez'
+  if (typeof type !== 'string' || !Object.hasOwn(ACTIONS, type)) return 'Ação desconhecida'
   const def = ACTIONS[type]
-  if (!def) return 'Ação desconhecida'
   if (player.coins >= MUST_COUP_AT && type !== 'coup') return 'Com 10 ou mais moedas, o Golpe de Estado é obrigatório'
   if (player.coins < def.cost) return `${def.label} requer ${def.cost} moedas`
 
@@ -192,6 +203,7 @@ function exchangeKeep(ctx: Ctx, player: PlayerState, cardIds: string[]): string 
   const s = ctx.s
   const ph = s.phase
   if (ph.kind !== 'choosing_exchange' || ph.action.actorId !== player.id) return 'Você não está trocando cartas agora'
+  if (!Array.isArray(cardIds)) return 'Escolha as cartas que vai manter'
   const hand = hidden(player)
   const pool = [...hand, ...ph.drawn]
   const keep = hand.length

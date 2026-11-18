@@ -1,0 +1,24 @@
+{
+  // Configuração da Cloudflare (Worker + Durable Objects + site estático).
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "coup-3d",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+
+  // O site (pasta dist/, gerada por `npm run build`) é servido pela própria Cloudflare.
+  // Só as rotas /api/* passam pelo Worker.
+  "assets": {
+    "directory": "../dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Uma instância de GameRoom por sala. "sqlite" funciona no plano gratuito.
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "GameRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GameRoom"] }],
+
+  "observability": { "enabled": true }
+}

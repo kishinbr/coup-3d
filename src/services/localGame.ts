@@ -2,6 +2,7 @@ import { decideBotCommand } from '../game/bots/simpleBot'
 import { applyCommand, createGame, waitingOn } from '../game/rules/engine'
 import { eventsFor, getPlayerView } from '../game/rules/view'
 import type { Command, GameEvent, GameState, PlayerView } from '../game/types/engine'
+import { SEAT_LAYOUT } from '../game/constants/seating'
 
 /**
  * Partida LOCAL contra bots (Fase 3).
@@ -14,7 +15,7 @@ import type { Command, GameEvent, GameState, PlayerView } from '../game/types/en
 
 export const HUMAN_ID = 'voce'
 
-/** Adversários disponíveis, cada um ligado a um assento da mesa. */
+/** Adversários do modo local, um por assento (o visual de cada um combina com o assento). */
 export const BOT_ROSTER: Record<number, { id: string; name: string }> = {
   1: { id: 'helena', name: 'Helena' },
   2: { id: 'rafael', name: 'Rafael' },
@@ -23,14 +24,6 @@ export const BOT_ROSTER: Record<number, { id: string; name: string }> = {
   5: { id: 'otavio', name: 'Otávio' },
 }
 
-/** Assentos usados conforme a quantidade de adversários (o seu é sempre o 0). */
-const SEAT_LAYOUT: Record<number, number[]> = {
-  1: [3],
-  2: [2, 4],
-  3: [2, 3, 4],
-  4: [1, 2, 4, 5],
-  5: [1, 2, 3, 4, 5],
-}
 
 /** Tempo para o jogador humano responder a uma contestação ou bloqueio. */
 export const RESPONSE_TIME_MS = 15_000
@@ -39,9 +32,8 @@ export interface LocalSnapshot {
   view: PlayerView
   /** Eventos novos desde o último snapshot, já filtrados para o jogador humano. */
   events: GameEvent[]
-  /** Momento (Date.now) em que a janela de resposta do humano expira. */
-  responseDeadline: number | null
-  seats: Record<string, number>
+  /** Prazo do jogador humano (Date.now em que expira e duração total). */
+  deadline: { at: number; total: number } | null
 }
 
 export interface LocalGameConfig {
@@ -60,7 +52,6 @@ export class LocalGame {
   private timers = new Map<string, Timer>()
   private deadline: { key: string; at: number; handle: ReturnType<typeof setTimeout> } | null = null
   private disposed = false
-  readonly seats: Record<string, number>
   private readonly listener: (snap: LocalSnapshot) => void
 
   constructor(config: LocalGameConfig, listener: (snap: LocalSnapshot) => void) {
@@ -71,7 +62,6 @@ export class LocalGame {
       { id: HUMAN_ID, name: config.playerName.trim() || 'Você' },
       ...seats.map((seat) => BOT_ROSTER[seat]),
     ]
-    this.seats = Object.fromEntries([[HUMAN_ID, 0], ...seats.map((seat) => [BOT_ROSTER[seat].id, seat])])
     const { state, events } = createGame(players, config.seed ?? (Date.now() & 0x7fffffff))
     this.state = state
     this.update(events)
@@ -104,8 +94,7 @@ export class LocalGame {
     this.listener({
       view: getPlayerView(this.state, HUMAN_ID),
       events: eventsFor(events, HUMAN_ID),
-      responseDeadline: this.deadline?.at ?? null,
-      seats: this.seats,
+      deadline: this.deadline ? { at: this.deadline.at, total: RESPONSE_TIME_MS } : null,
     })
   }
 

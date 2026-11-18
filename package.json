@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:server": "node scripts/ensure-dist.mjs && wrangler dev --config server/wrangler.jsonc",
+    "dev:online": "concurrently -n site,servidor -c yellow,cyan \"npm:dev\" \"npm:dev:server\"",
+    "build": "tsc -b && tsc -p server/tsconfig.json && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "deploy": "npm run build && wrangler deploy --config server/wrangler.jsonc"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",
@@ -23,14 +26,17 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261118.1",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.7",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
-    "vitest": "^5.1.1"
+    "vitest": "^5.1.1",
+    "wrangler": "^4.164.0"
   }
 }

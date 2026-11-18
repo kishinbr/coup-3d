@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { RESPONSE_TIME_MS } from '../../services/localGame'
+import { normalizeRoomCode } from '../../game/types/protocol'
+import { loadSession } from '../../services/onlineRoom'
+import { useNow } from '../../hooks/useNow'
 import { useCameraStore } from '../../stores/cameraStore'
 import { useGameStore } from '../../stores/gameStore'
 import { useInterfaceStore } from '../../stores/interfaceStore'
@@ -8,8 +10,10 @@ import { ActionPanel } from './ActionPanel'
 import { DecisionPanel } from './DecisionPanel'
 import { GameLog } from './GameLog'
 import { GameOver } from './GameOver'
-import { Lobby } from './Lobby'
+import { MainMenu } from './MainMenu'
+import { PlayerTags } from './PlayerTags'
 import { Portrait } from './Portrait'
+import { RoomLobby } from './RoomLobby'
 import { StatusBanner } from './StatusBanner'
 
 /**
@@ -19,6 +23,11 @@ import { StatusBanner } from './StatusBanner'
 export function GameHUD() {
   const status = useGameStore((s) => s.status)
   const view = useGameStore((s) => s.view)
+  const mode = useGameStore((s) => s.mode)
+  const connection = useGameStore((s) => s.connection)
+  const leave = useGameStore((s) => s.leave)
+  const roomCode = useGameStore((s) => s.room?.code)
+  const initialCode = useInitialRoom()
   const locked = useCameraStore((s) => s.locked)
   const { cardsOpen, toast, setCardsOpen } = useInterfaceStore()
   const me = view?.players.find((p) => p.id === view.viewerId)
@@ -28,11 +37,11 @@ export function GameHUD() {
   return (
     <div className={`hud ${locked ? 'is-locked' : ''}`}>
       <div className="vignette" />
+      {playing && <PlayerTags />}
 
       <header className="hud-top">
         <div className="brand">
           <Logo />
-          {playing && <div className="prototype-badge">Modo local · Fase 3</div>}
         </div>
         {playing && <StatusBanner />}
         {playing && turnPlayer && (
@@ -62,29 +71,41 @@ export function GameHUD() {
       {playing && (
         <footer className="hud-bottom">
           {me && (
-            <motion.div className={`me-card ${me.eliminated ? 'is-out' : ''}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-              <Portrait id={me.id} name={me.name} size={64} active={view.currentPlayerId === me.id} />
-              <div>
-                <div className="me-card__name">{me.name}</div>
-                <div className="me-card__stats">
-                  {me.eliminated ? (
-                    <span className="me-card__label">fora da partida · assistindo</span>
-                  ) : (
-                    <>
-                      <span className="coin-chip coin-chip--lg" />
-                      <b>{me.coins}</b>
-                      <span className="me-card__sep" />
-                      <span className="influence-pips influence-pips--lg">
-                        {Array.from({ length: 2 }, (_, i) => (
-                          <i key={i} className={i < me.hiddenInfluenceCount ? 'on' : ''} />
-                        ))}
-                      </span>
-                      <span className="me-card__label">influências</span>
-                    </>
-                  )}
-                </div>
+            <div className="me-stack">
+              <div className="brand__row">
+                <div className="prototype-badge">{mode === 'online' ? `Sala ${roomCode ?? ''}` : 'Contra bots'}</div>
+                <button className="link-btn" onClick={leave}>
+                  Sair
+                </button>
               </div>
-            </motion.div>
+              <motion.div
+                className={`me-card ${me.eliminated ? 'is-out' : ''}`}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <Portrait name={me.name} size={64} active={view.currentPlayerId === me.id} />
+                <div>
+                  <div className="me-card__name">{me.name}</div>
+                  <div className="me-card__stats">
+                    {me.eliminated ? (
+                      <span className="me-card__label">fora da partida · assistindo</span>
+                    ) : (
+                      <>
+                        <span className="coin-chip coin-chip--lg" />
+                        <b>{me.coins}</b>
+                        <span className="me-card__sep" />
+                        <span className="influence-pips influence-pips--lg">
+                          {Array.from({ length: 2 }, (_, i) => (
+                            <i key={i} className={i < me.hiddenInfluenceCount ? 'on' : ''} />
+                          ))}
+                        </span>
+                        <span className="me-card__label">influências</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           )}
 
           <AnimatePresence mode="wait">
@@ -101,7 +122,13 @@ export function GameHUD() {
               </motion.button>
             ) : (
               !view.prompt && (
-                <motion.div key="hint" className="hint" initial={{ opacity: 0 }} animate={{ opacity: locked ? 0.55 : 1 }} exit={{ opacity: 0 }}>
+                <motion.div
+                  key="hint"
+                  className="hint"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: locked ? 0.55 : 1 }}
+                  exit={{ opacity: 0 }}
+                >
                   {locked ? (
                     <>
                       <kbd>ESC</kbd> libera o cursor
@@ -134,7 +161,12 @@ export function GameHUD() {
         )}
       </AnimatePresence>
 
-      {status === 'lobby' && <Lobby />}
+      {mode === 'online' && connection && connection !== 'open' && status === 'playing' && (
+        <div className="conn-banner">{connection === 'reconnecting' ? 'Conexão perdida · reconectando…' : 'Conectando…'}</div>
+      )}
+
+      {status === 'menu' && <MainMenu initialCode={initialCode} />}
+      {status === 'room' && <RoomLobby />}
       {playing && <GameOver />}
     </div>
   )
@@ -159,20 +191,36 @@ function Logo() {
   )
 }
 
-/** Anel do tempo de resposta: só aparece quando você tem uma janela de resposta aberta. */
-function TurnRing() {
-  const deadline = useGameStore((s) => s.responseDeadline)
-  const turn = useGameStore((s) => s.view?.turn ?? 0)
-  const [now, setNow] = useState(() => Date.now())
+/**
+ * Ao abrir o site: volta para a sala em que você estava (mesmo depois de recarregar a página)
+ * ou preenche o código vindo de um link de convite (?sala=ABCDE).
+ */
+function useInitialRoom(): string {
+  const [code] = useState(() => {
+    try {
+      return normalizeRoomCode(new URL(window.location.href).searchParams.get('sala') ?? '')
+    } catch {
+      return ''
+    }
+  })
   useEffect(() => {
-    if (!deadline) return
-    const id = setInterval(() => setNow(Date.now()), 250)
-    return () => clearInterval(id)
-  }, [deadline])
+    const session = loadSession()
+    if (session && (!code || code === session.code) && useGameStore.getState().status === 'menu') {
+      useGameStore.getState().resumeOnline(session)
+    }
+  }, [code])
+  return code
+}
+
+/** Anel do prazo: aparece quando a partida está esperando uma decisão sua. */
+function TurnRing() {
+  const deadline = useGameStore((s) => s.deadline)
+  const turn = useGameStore((s) => s.view?.turn ?? 0)
+  const now = useNow(!!deadline)
   const r = 19
   const c = 2 * Math.PI * r
-  const left = deadline ? Math.max(0, deadline - now) : 0
-  const frac = deadline ? left / RESPONSE_TIME_MS : 1
+  const left = deadline ? Math.max(0, deadline.at - now) : 0
+  const frac = deadline ? left / deadline.total : 1
   return (
     <div className="turn-ring" title={deadline ? 'Tempo para responder' : 'Turno'}>
       <svg width="48" height="48" viewBox="0 0 48 48">

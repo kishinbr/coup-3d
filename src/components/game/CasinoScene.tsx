@@ -1,18 +1,17 @@
 import { useMemo } from 'react'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { EYE_HEIGHT, TABLE, seatAngle, seatPoint } from '../../game/constants/table'
 import { AVATAR_LOOKS, useGameStore } from '../../stores/gameStore'
 import { useInterfaceStore } from '../../stores/interfaceStore'
 import { CameraController } from '../camera/CameraController'
 import { HeldCards } from '../camera/HeldCards'
-import { PlayerTag } from '../interface/PlayerTag'
 import { CasinoRoom } from './CasinoRoom'
 import { Chair } from './Chair'
 import { CoinField, stackPlacements, type CoinPlacement } from './Coin'
 import { CourtDeck, RevealedCards, TREASURY_POSITION } from './DiscardArea'
 import { Lighting } from './Lighting'
-import { PlayerAvatar, AVATAR_TAG_HEIGHT } from './PlayerAvatar'
+import { PlayerAvatar } from './PlayerAvatar'
+import { TagProjector } from './TagProjector'
 import { PlayingCard } from './PlayingCard'
 import { PokerTable } from './PokerTable'
 import { TurnMarker } from './TurnMarker'
@@ -24,16 +23,13 @@ const TREASURY_COINS = 30
 export function CasinoScene() {
   const view = useGameStore((s) => s.view)
   const seats = useGameStore((s) => s.seats)
-  const send = useGameStore((s) => s.send)
+  const looks = useGameStore((s) => s.looks)
   const cardsOpen = useInterfaceStore((s) => s.cardsOpen)
-  const targeting = useInterfaceStore((s) => s.targeting)
-  const setTargeting = useInterfaceStore((s) => s.setTargeting)
 
   const players = useMemo(() => view?.players ?? [], [view])
   const me = players.find((p) => p.id === view?.viewerId)
   const opponents = players.filter((p) => p.id !== view?.viewerId)
   const turnSeat = view ? seats[view.currentPlayerId] : undefined
-  const validTargets = view?.prompt?.kind === 'choose_action' ? view.prompt.targets : []
 
   const coins = useMemo(() => {
     const all: CoinPlacement[] = []
@@ -86,8 +82,8 @@ export function CasinoScene() {
         const seat = seats[p.id]
         if (seat === undefined) return null
         const [x, z] = seatPoint(seat, TABLE.seatRadius)
-        const look = AVATAR_LOOKS[p.id]
-        const selectable = targeting !== null && validTargets.includes(p.id)
+        const lookKey = looks[p.id]
+        const look = lookKey ? AVATAR_LOOKS[lookKey] : undefined
         return (
           <group key={p.id}>
             {look && (
@@ -95,19 +91,6 @@ export function CasinoScene() {
                 <PlayerAvatar look={look} cardsInHand={p.hiddenInfluenceCount} lookAt={LOCAL_EYE} phase={i * 2.3} eliminated={p.eliminated} />
               </group>
             )}
-            <Html position={[x, AVATAR_TAG_HEIGHT, z]} center zIndexRange={[10, 0]} style={{ pointerEvents: selectable ? 'auto' : 'none' }}>
-              <PlayerTag
-                player={p}
-                isTurn={p.id === view?.currentPlayerId && view?.phase.kind !== 'game_over'}
-                thinking={!!view?.phase.waitingOn.includes(p.id)}
-                selectable={selectable}
-                onSelect={() => {
-                  if (!targeting) return
-                  send({ type: 'declare_action', action: targeting, targetId: p.id })
-                  setTargeting(null)
-                }}
-              />
-            </Html>
             <RevealedCards seat={seat} cards={p.revealed} />
           </group>
         )
@@ -131,6 +114,7 @@ export function CasinoScene() {
       <CoinField coins={coins} />
       {turnSeat !== undefined && view?.phase.kind !== 'game_over' && <TurnMarker seat={turnSeat} />}
       <HeldCards />
+      <TagProjector seats={seats} />
     </>
   )
 }
